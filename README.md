@@ -1,0 +1,2 @@
+# deteksi_penyakit_daun_jagung
+deteksi_penyakit_daun_jagung
