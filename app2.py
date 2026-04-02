@@ -8,8 +8,7 @@ import os
 st.set_page_config(page_title="Deteksi Penyakit Daun Jagung", page_icon="🌽")
 
 # --- LOAD MODEL ---
-# Pastikan file 'model_jagung_v1.h5' ada di folder yang sama
-@st.cache_resource # Menggunakan cache agar model tidak di-load ulang setiap interaksi
+@st.cache_resource 
 def load_my_model():
     if os.path.exists('model_jagung_v1.h5'):
         return tf.keras.models.load_model('model_jagung_v1.h5')
@@ -17,35 +16,33 @@ def load_my_model():
         return None
 
 model = load_my_model()
+# Label harus sesuai dengan urutan index saat training
 CLASSES = ['Hawar (Blight)', 'Karat (Rust)', 'Sehat (Healthy)']
 
 # --- UI STREAMLIT ---
 st.title("🌽 Deteksi Penyakit Daun Jagung")
-st.write("Unggah foto daun jagung untuk mendiagnosis kondisinya secara otomatis menggunakan AI.")
+st.write("Unggah foto daun jagung untuk mendiagnosis kondisinya secara otomatis.")
 
-# Sidebar untuk informasi tambahan
 with st.sidebar:
     st.header("Tentang Aplikasi")
-    st.info("Aplikasi ini menggunakan model MobileNetV2 untuk mengklasifikasikan 3 kategori: Hawar, Karat, dan Sehat.")
+    st.info("Aplikasi ini menggunakan MobileNetV2. Akurasi sangat bergantung pada kualitas pencahayaan dan kejelasan gambar daun.")
     if model is None:
-        st.error("⚠️ Model 'model_jagung_v1.h5' tidak ditemukan. Pastikan Anda sudah menjalankan proses training terlebih dahulu.")
+        st.error("⚠️ Model 'model_jagung_v1.h5' tidak ditemukan.")
 
 # --- FITUR UPLOAD GAMBAR ---
 uploaded_file = st.file_uploader("Pilih gambar daun jagung...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Menampilkan gambar yang diunggah
     image = Image.open(uploaded_file)
-    st.image(image, caption='Gambar yang diunggah', use_column_width=True)
+    st.image(image, caption='Gambar yang diunggah', use_container_width=True)
     
     if model is not None:
         if st.button('Mulai Analisis'):
             with st.spinner('Sedang menganalisis...'):
-                # 1. Preprocessing Gambar
+                # 1. Preprocessing
                 img = image.resize((224, 224))
                 img_array = np.array(img) / 255.0
                 
-                # Menangani gambar RGBA (4 channel) jika ada
                 if img_array.shape[-1] == 4:
                     img_array = img_array[..., :3]
                 
@@ -57,18 +54,25 @@ if uploaded_file is not None:
                 class_idx = np.argmax(score)
                 confidence = score[class_idx] * 100
 
-                # 3. Tampilkan Hasil
                 st.divider()
-                st.subheader(f"Hasil Prediksi: **{CLASSES[class_idx]}**")
-                
-                # Progress bar untuk tingkat keyakinan
-                st.write(f"Tingkat Kepercayaan: {confidence:.2f}%")
-                st.progress(int(confidence))
 
-                # Tips berdasarkan hasil
-                if CLASSES[class_idx] == 'Sehat (Healthy)':
-                    st.success("Tanaman Anda terlihat sehat! Tetap jaga kelembapan dan nutrisi tanah.")
+                # --- VALIDASI APAKAH INI DAUN JAGUNG ---
+                # Jika skor tertinggi di bawah 65%, kemungkinan besar bukan daun jagung
+                THRESHOLD = 65.0 
+
+                if confidence < THRESHOLD:
+                    st.error(f"⚠️ **Gambar Tidak Dikenali.**")
+                    st.warning(f"Tingkat keyakinan hanya {confidence:.2f}%. Mohon unggah foto daun jagung yang lebih jelas dan dekat.")
                 else:
-                    st.warning(f"Terdeteksi gejala {CLASSES[class_idx]}. Segera lakukan pengecekan pada area lahan dan konsultasikan dengan ahli agronomi.")
+                    # 3. Tampilkan Hasil Jika Valid
+                    st.subheader(f"Hasil Prediksi: **{CLASSES[class_idx]}**")
+                    st.write(f"Tingkat Kepercayaan: {confidence:.2f}%")
+                    st.progress(int(confidence))
+
+                    # Perbaikan logika pengecekan string (disesuaikan dengan isi CLASSES)
+                    if 'Sehat' in CLASSES[class_idx]:
+                        st.success("Tanaman Anda terlihat sehat! Tetap jaga kelembapan dan nutrisi tanah.")
+                    else:
+                        st.warning(f"Terdeteksi gejala {CLASSES[class_idx]}. Segera lakukan pengecekan lahan.")
     else:
         st.error("Gagal melakukan prediksi karena model tidak tersedia.")
